@@ -23,10 +23,13 @@ import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
+import android.widget.ListView;
 import android.widget.Toast;
 
+import com.example.padlockdemo.adapter.PadlocksAdapter;
 import com.example.padlockdemo.model.BluetoothPadlock;
 import com.example.padlockdemo.model.Command;
+import com.example.padlockdemo.ui.home.HomeFragment;
 import com.example.padlockdemo.util.AsyncUtil;
 import com.example.padlockdemo.util.StringUtil;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -48,20 +51,17 @@ import java.util.Vector;
 public class MainActivity extends AppCompatActivity {
     private final static String TAG = MainActivity.class.getSimpleName();
 
-    private static Activity currentActivity;
-    private BluetoothAdapter mBluetoothAdapter;
-    private BluetoothLeScanner mBluetoothLeScanner;
-    private boolean mScanning;
-    private Handler mHandler;
     private final static int REQUEST_ENABLE_BT = 1;
-    private static final long SCAN_PERIOD = 10000;
 
-    private String serviceUuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-    private String notifyUuid = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-    private String writeUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
-    private String name = "HeartLock";
+    public static String serviceUuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+    public static String notifyUuid = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+    public static String writeUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+    public static String name = "HeartLock";
 
-    private List<BluetoothPadlock> bluetoothPadlockList;
+    private static Activity currentActivity;
+    private static BluetoothAdapter bluetoothAdapter;
+    private static BluetoothLeScanner bluetoothLeScanner;
+    public static ArrayList<BluetoothPadlock> bluetoothPadlockList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,26 +78,28 @@ public class MainActivity extends AppCompatActivity {
 
         currentActivity = this;
         bluetoothPadlockList = new ArrayList<>();
-        bluetoothPadlockList.add(new BluetoothPadlock("868315518395127", serviceUuid, name, "D5:3B:F9:45:27:58", "00000000"));
-        //bluetoothPadlockList.add(new BluetoothPadlock("868315518395770", serviceUuid, name, "F1:F2:80:90:81:29", "a716c2f1"));
-        //bluetoothPadlockList.add(new BluetoothPadlock("868315518397131", serviceUuid, name, "C3:17:99:9C:49:AF", "9059eea5"));
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
 
         if (!requestBlePermissions(this, REQUEST_ENABLE_BT) && areLocationServicesEnabled(this)) {
             startBleService();
         }
     }
 
-    private void startBleService() {
-        final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
-        mBluetoothAdapter = bluetoothManager.getAdapter();
-        mBluetoothLeScanner = mBluetoothAdapter.getBluetoothLeScanner();
+    public void startBleService() {
+        final BluetoothManager bluetoothManager = (BluetoothManager)getSystemService(Context.BLUETOOTH_SERVICE);
+        bluetoothAdapter = bluetoothManager.getAdapter();
+        bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
 
         if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
             showMessage("BLE is not supported");
             finish();
         }
 
-        if (mBluetoothAdapter == null || !mBluetoothAdapter.isEnabled()) {
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
             Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
         } else {
@@ -169,11 +171,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void scanLeDevice(final boolean enable) {
         ScanFilter.Builder builder = new ScanFilter.Builder();
-
-        bluetoothPadlockList.stream().forEach(i -> {
-            builder.setDeviceAddress(i.getMacAddress());
-        });
-
+        builder.setDeviceName(name);
         Vector<ScanFilter> filters = new Vector<ScanFilter>();
         filters.add(builder.build());
 
@@ -183,12 +181,10 @@ public class MainActivity extends AppCompatActivity {
 
         if (enable) {
             showMessage("Start scanning BLE devices...");
-            mScanning = true;
-            mBluetoothLeScanner.startScan(filters, scanSettingsBuilder.build(), scanCallback);
+            bluetoothLeScanner.startScan(filters, scanSettingsBuilder.build(), scanCallback);
         } else {
             showMessage("Stop scanning BLE devices...");
-            mScanning = false;
-            mBluetoothLeScanner.stopScan(scanCallback);
+            bluetoothLeScanner.stopScan(scanCallback);
         }
     }
 
@@ -316,8 +312,8 @@ public class MainActivity extends AppCompatActivity {
     private void addDevice(BluetoothDevice device, ScanResult scanResult) {
         BluetoothPadlock padlock = getBluetoothPadlock(device.getAddress());
         padlock.setBluetoothDevice(device);
-
-        device.connectGatt(this, false, bluetoothGattCallback);
+        HomeFragment.padlocksAdapter.notifyDataSetChanged();;
+        //device.connectGatt(this, false, bluetoothGattCallback);
     }
 
     private static void showMessage(String message) {
