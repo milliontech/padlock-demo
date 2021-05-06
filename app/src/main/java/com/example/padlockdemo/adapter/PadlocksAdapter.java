@@ -14,8 +14,11 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.example.padlockdemo.MainActivity;
 import com.example.padlockdemo.R;
 import com.example.padlockdemo.model.BluetoothPadlock;
+import com.example.padlockdemo.util.AsyncUtil;
+import com.example.padlockdemo.util.PadlockUtil;
 
 import java.util.ArrayList;
 
@@ -25,6 +28,7 @@ public class PadlocksAdapter extends ArrayAdapter<BluetoothPadlock> {
         TextView id;
         TextView name;
         TextView macAddress;
+        TextView lastCommand;
         Button connectButton;
     }
 
@@ -45,6 +49,7 @@ public class PadlocksAdapter extends ArrayAdapter<BluetoothPadlock> {
             viewHolder.id = (TextView) convertView.findViewById(R.id.textview_id);
             viewHolder.name = (TextView) convertView.findViewById(R.id.textview_name);
             viewHolder.macAddress = (TextView) convertView.findViewById(R.id.textview_mac_address);
+            viewHolder.lastCommand = (TextView) convertView.findViewById(R.id.textview_last_command);
             viewHolder.connectButton = (Button) convertView.findViewById(R.id.button_connect);
             convertView.setTag(viewHolder);
         } else {
@@ -65,11 +70,50 @@ public class PadlocksAdapter extends ArrayAdapter<BluetoothPadlock> {
 
                         switch (newState) {
                             case BluetoothProfile.STATE_CONNECTED:
-                                viewHolder.connectButton.setEnabled(false);
-                                notifyDataSetChanged();
+                                AsyncUtil.postDelay(getContext(), () -> {
+                                    viewHolder.connectButton.setEnabled(false);
+                                    notifyDataSetChanged();
+                                }, 0);
+                                MainActivity.showMessage("Connected to GATT server.");
+                                gatt.discoverServices();
+                                break;
                             case BluetoothProfile.STATE_DISCONNECTED:
-                                viewHolder.connectButton.setEnabled(true);
-                                notifyDataSetChanged();
+                                MainActivity.showMessage("Disconnected from GATT server.");
+                            default:
+                                AsyncUtil.postDelay(getContext(), () -> {
+                                    viewHolder.connectButton.setEnabled(true);
+                                    notifyDataSetChanged();
+                                }, 0);
+                                break;
+                        }
+                    }
+
+                    @Override
+                    public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+                        super.onServicesDiscovered(gatt, status);
+
+                        switch (status) {
+                            case BluetoothGatt.GATT_SUCCESS:
+                                MainActivity.showMessage("Unlocking device...");
+                                PadlockUtil.unlock(getContext(), gatt, padlock, (data) -> {
+                                    MainActivity.showMessage("Success");
+                                    gatt.disconnect();
+                                    AsyncUtil.postDelay(getContext(), () -> {
+                                        viewHolder.lastCommand.setText(data);
+                                        notifyDataSetChanged();
+                                        MainActivity.clipboardManager.setText(data);
+                                    }, 0);
+                                    return true;
+                                }, (data) -> {
+                                    MainActivity.showMessage("Fail");
+                                    gatt.disconnect();
+                                    AsyncUtil.postDelay(getContext(), () -> {
+                                        viewHolder.lastCommand.setText(data);
+                                        notifyDataSetChanged();
+                                        MainActivity.clipboardManager.setText(data);
+                                    }, 0);
+                                    return true;
+                                });
                                 break;
                             default:
                                 break;

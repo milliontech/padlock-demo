@@ -16,6 +16,8 @@ import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
 import android.bluetooth.le.ScanSettings;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -30,7 +32,10 @@ import com.example.padlockdemo.adapter.PadlocksAdapter;
 import com.example.padlockdemo.model.BluetoothPadlock;
 import com.example.padlockdemo.model.Command;
 import com.example.padlockdemo.ui.home.HomeFragment;
+import com.example.padlockdemo.util.AesUtil;
 import com.example.padlockdemo.util.AsyncUtil;
+import com.example.padlockdemo.util.BluetoothUtil;
+import com.example.padlockdemo.util.PadlockUtil;
 import com.example.padlockdemo.util.StringUtil;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
@@ -53,15 +58,12 @@ public class MainActivity extends AppCompatActivity {
 
     private final static int REQUEST_ENABLE_BT = 1;
 
-    public static String serviceUuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-    public static String notifyUuid = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-    public static String writeUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
-    public static String name = "HeartLock";
-
     private static Activity currentActivity;
     private static BluetoothAdapter bluetoothAdapter;
     private static BluetoothLeScanner bluetoothLeScanner;
     public static ArrayList<BluetoothPadlock> bluetoothPadlockList;
+    public static ClipboardManager clipboardManager;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,13 +80,15 @@ public class MainActivity extends AppCompatActivity {
 
         currentActivity = this;
         bluetoothPadlockList = new ArrayList<>();
+
+        clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
 
-        if (!requestBlePermissions(this, REQUEST_ENABLE_BT) && areLocationServicesEnabled(this)) {
+        if (!BluetoothUtil.requestBlePermissions(this, REQUEST_ENABLE_BT) && BluetoothUtil.areLocationServicesEnabled(this)) {
             startBleService();
         }
     }
@@ -111,67 +115,16 @@ public class MainActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-        if (requestCode == REQUEST_ENABLE_BT && checkGrantResults(permissions, grantResults)) {
-            if (areLocationServicesEnabled(this)) {
+        if (requestCode == REQUEST_ENABLE_BT && BluetoothUtil.checkGrantResults(permissions, grantResults)) {
+            if (BluetoothUtil.areLocationServicesEnabled(this)) {
                 startBleService();
             }
         }
     }
 
-    private boolean hasBlePermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    private boolean requestBlePermissions(final Activity activity, int requestCode) {
-        if (hasBlePermissions())
-            return false;
-
-        ActivityCompat.requestPermissions(activity, new String[] {
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-        }, requestCode);
-
-        return true;
-    }
-
-    private boolean checkGrantResults(String[] permissions, int[] grantResults) {
-        int granted = 0;
-
-        if (grantResults.length > 0) {
-            for (int i = 0; i < permissions.length; i++) {
-                String permission = permissions[i];
-                if (permission.equals(Manifest.permission.ACCESS_FINE_LOCATION) || permission.equals(Manifest.permission.ACCESS_COARSE_LOCATION)) {
-                    if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
-                        granted++;
-                    }
-                }
-            }
-        } else {
-            return false;
-        }
-
-        return granted == 2;
-    }
-
-    private boolean areLocationServicesEnabled(Context context) {
-        LocationManager locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
-
-        try {
-            return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
     private void scanLeDevice(final boolean enable) {
         ScanFilter.Builder builder = new ScanFilter.Builder();
-        builder.setDeviceName(name);
+        builder.setDeviceName(PadlockUtil.name);
         Vector<ScanFilter> filters = new Vector<ScanFilter>();
         filters.add(builder.build());
 
@@ -196,131 +149,26 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private BluetoothGattCallback bluetoothGattCallback = new BluetoothGattCallback() {
-        @Override
-        public void onPhyUpdate(BluetoothGatt gatt, int txPhy, int rxPhy, int status) {
-            super.onPhyUpdate(gatt, txPhy, rxPhy, status);
-        }
-
-        @Override
-        public void onPhyRead(BluetoothGatt gatt, int txPhy, int rxPhy, int status) {
-            super.onPhyRead(gatt, txPhy, rxPhy, status);
-        }
-
-        @Override
-        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            super.onConnectionStateChange(gatt, status, newState);
-
-            switch (newState) {
-                case BluetoothProfile.STATE_CONNECTED:
-                    showMessage("Connected to GATT server.");
-                    if (gatt.discoverServices()) {
-                        showMessage("Attempting to start service discovery...");
-                    }
-                    break;
-                case BluetoothProfile.STATE_DISCONNECTED:
-                    showMessage("Disconnected from GATT server.");
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        @Override
-        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            super.onServicesDiscovered(gatt, status);
-            switch (status) {
-                case BluetoothGatt.GATT_SUCCESS:
-                    BluetoothPadlock padlock = getBluetoothPadlock(gatt.getDevice().getAddress());
-                    List<BluetoothGattService> bluetoothGattServices = gatt.getServices();
-                    padlock.setBluetoothGattServices(bluetoothGattServices);
-
-                    BluetoothGattService service;
-                    //service = bluetoothGattServices.stream().filter(i -> i.getUuid().equals(UUID.fromString(serviceUuid))).findFirst().get();
-                    service = gatt.getService(UUID.fromString(serviceUuid));
-                    BluetoothGattCharacteristic characteristic = service.getCharacteristic(UUID.fromString(writeUuid));
-
-                    //BluetoothGattService readService = bluetoothGattServices.get(0);
-                    //BluetoothGattCharacteristic readCharacteristic = readService.getCharacteristics().get(0);
-                    //boolean result = gatt.readCharacteristic(readCharacteristic);
-
-                    AsyncUtil.postDelay(currentActivity, () -> {
-                        Command command = Command.unlockCmd;
-                        command.setToken(StringUtil.StrToHexbyte(padlock.getToken()));
-                        //characteristic.setValue(command.getCommandData());
-
-                        showMessage("Sending command: " + command.getCommandString());
-                        if (gatt.writeCharacteristic(characteristic)) {
-                            showMessage("Sending command Success.");;
-                        } else {
-                            showMessage("Sending command Fail.");
-                        }
-                    }, 1000);
-
-
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        @Override
-        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            super.onCharacteristicRead(gatt, characteristic, status);
-        }
-
-        @Override
-        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            super.onCharacteristicWrite(gatt, characteristic, status);
-        }
-
-        @Override
-        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            super.onCharacteristicChanged(gatt, characteristic);
-        }
-
-        @Override
-        public void onDescriptorRead(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-            super.onDescriptorRead(gatt, descriptor, status);
-        }
-
-        @Override
-        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-            super.onDescriptorWrite(gatt, descriptor, status);
-        }
-
-        @Override
-        public void onReliableWriteCompleted(BluetoothGatt gatt, int status) {
-            super.onReliableWriteCompleted(gatt, status);
-        }
-
-        @Override
-        public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
-            super.onReadRemoteRssi(gatt, rssi, status);
-        }
-
-        @Override
-        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
-            super.onMtuChanged(gatt, mtu, status);
-        }
-    };
-
     private BluetoothPadlock getBluetoothPadlock (String macAddress) {
-        return bluetoothPadlockList.stream().filter(i -> i.getMacAddress().equals(macAddress)).findFirst().get();
+        for (BluetoothPadlock padlock : bluetoothPadlockList) {
+            if (padlock.getMacAddress().equals(macAddress))
+                return padlock;
+        }
+        return null;
     }
 
     private void addDevice(BluetoothDevice device, ScanResult scanResult) {
         BluetoothPadlock padlock = getBluetoothPadlock(device.getAddress());
-        padlock.setBluetoothDevice(device);
-        HomeFragment.padlocksAdapter.notifyDataSetChanged();;
-        //device.connectGatt(this, false, bluetoothGattCallback);
+        if (padlock != null) {
+            padlock.setBluetoothDevice(device);
+            HomeFragment.padlocksAdapter.notifyDataSetChanged();
+        }
     }
 
-    private static void showMessage(String message) {
+    public static void showMessage(String message) {
         AsyncUtil.postDelay(currentActivity, () -> {
-            Toast.makeText(currentActivity, message, Toast.LENGTH_LONG).show();
+            Toast.makeText(currentActivity, message, Toast.LENGTH_SHORT).show();
             Log.i(TAG, message);
         }, 0);
     }
-
 }
