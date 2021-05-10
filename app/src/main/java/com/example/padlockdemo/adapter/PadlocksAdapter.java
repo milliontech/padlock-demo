@@ -1,56 +1,68 @@
 package com.example.padlockdemo.adapter;
 
 import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothGattCallback;
-import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.clj.fastble.BleManager;
+import com.clj.fastble.callback.BleGattCallback;
+import com.clj.fastble.callback.BleNotifyCallback;
+import com.clj.fastble.callback.BleWriteCallback;
+import com.clj.fastble.data.BleDevice;
+import com.clj.fastble.exception.BleException;
 import com.example.padlockdemo.MainActivity;
 import com.example.padlockdemo.R;
-import com.example.padlockdemo.model.BluetoothPadlock;
+import com.example.padlockdemo.model.BlePadlock;
+import com.example.padlockdemo.model.Command;
 import com.example.padlockdemo.util.AsyncUtil;
 import com.example.padlockdemo.util.PadlockUtil;
+import com.example.padlockdemo.util.StringUtil;
 
 import java.util.ArrayList;
+import java.util.UUID;
 
-public class PadlocksAdapter extends ArrayAdapter<BluetoothPadlock> {
+public class PadlocksAdapter extends ArrayAdapter<BlePadlock> {
 
     private static class ViewHolder {
+        CheckBox selected;
         TextView id;
         TextView name;
         TextView macAddress;
         TextView lastCommand;
         Button connectButton;
+        Button unlockButton;
     }
 
-    public PadlocksAdapter(Context context, ArrayList<BluetoothPadlock> padlocks) {
+    public PadlocksAdapter(Context context, ArrayList<BlePadlock> padlocks) {
         super(context, R.layout.item_padlock, padlocks);
     }
 
     @NonNull
     @Override
     public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
-        BluetoothPadlock padlock = getItem(position);
+        BlePadlock padlock = getItem(position);
 
         ViewHolder viewHolder;
         if (convertView == null) {
             viewHolder = new ViewHolder();
             LayoutInflater inflater = LayoutInflater.from(getContext());
             convertView = inflater.inflate(R.layout.item_padlock, parent, false);
+            viewHolder.selected = (CheckBox) convertView.findViewById(R.id.checkbox_item_padlock_select);
             viewHolder.id = (TextView) convertView.findViewById(R.id.textview_id);
             viewHolder.name = (TextView) convertView.findViewById(R.id.textview_name);
             viewHolder.macAddress = (TextView) convertView.findViewById(R.id.textview_mac_address);
             viewHolder.lastCommand = (TextView) convertView.findViewById(R.id.textview_last_command);
-            viewHolder.connectButton = (Button) convertView.findViewById(R.id.button_connect);
+            viewHolder.connectButton = (Button) convertView.findViewById(R.id.button_padlock_connect);
+            viewHolder.unlockButton = (Button) convertView.findViewById(R.id.button_padlock_unlock);
             convertView.setTag(viewHolder);
         } else {
             viewHolder = (ViewHolder) convertView.getTag();
@@ -58,69 +70,30 @@ public class PadlocksAdapter extends ArrayAdapter<BluetoothPadlock> {
 
         viewHolder.id.setText(padlock.getId());
         viewHolder.name.setText(padlock.getName());
+        if (padlock.getDevice() != null && !padlock.isProccessing()) {
+            //viewHolder.name.setText(padlock.getName() + (padlock.isLocked() ? " (Locked)" : " (Unlocked)") );
+        }
         viewHolder.macAddress.setText(padlock.getMacAddress());
-        viewHolder.connectButton.setEnabled(padlock.getBluetoothDevice() != null);
-        viewHolder.connectButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                padlock.getBluetoothDevice().connectGatt(getContext(), false, new BluetoothGattCallback() {
-                    @Override
-                    public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-                        super.onConnectionStateChange(gatt, status, newState);
+        viewHolder.connectButton.setEnabled(padlock.getDevice() != null);
+        viewHolder.unlockButton.setEnabled(padlock.getDevice() != null);
 
-                        switch (newState) {
-                            case BluetoothProfile.STATE_CONNECTED:
-                                AsyncUtil.postDelay(getContext(), () -> {
-                                    viewHolder.connectButton.setEnabled(false);
-                                    notifyDataSetChanged();
-                                }, 0);
-                                MainActivity.showMessage("Connected to GATT server.");
-                                gatt.discoverServices();
-                                break;
-                            case BluetoothProfile.STATE_DISCONNECTED:
-                                MainActivity.showMessage("Disconnected from GATT server.");
-                            default:
-                                AsyncUtil.postDelay(getContext(), () -> {
-                                    viewHolder.connectButton.setEnabled(true);
-                                    notifyDataSetChanged();
-                                }, 0);
-                                break;
+        viewHolder.unlockButton.setOnClickListener(view -> {
+            padlock.setProccessing(true);
+            PadlockUtil.unlock(
+                    getContext(),
+                    padlock,
+                    data -> {
+                        if (Command.isRequestSuccess(data)) {
+                            MainActivity.showMessage("Unlock successfully!");
                         }
-                    }
-
-                    @Override
-                    public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-                        super.onServicesDiscovered(gatt, status);
-
-                        switch (status) {
-                            case BluetoothGatt.GATT_SUCCESS:
-                                MainActivity.showMessage("Unlocking device...");
-                                PadlockUtil.unlock(getContext(), gatt, padlock, (data) -> {
-                                    MainActivity.showMessage("Success");
-                                    gatt.disconnect();
-                                    AsyncUtil.postDelay(getContext(), () -> {
-                                        viewHolder.lastCommand.setText(data);
-                                        notifyDataSetChanged();
-                                        MainActivity.clipboardManager.setText(data);
-                                    }, 0);
-                                    return true;
-                                }, (data) -> {
-                                    MainActivity.showMessage("Fail");
-                                    gatt.disconnect();
-                                    AsyncUtil.postDelay(getContext(), () -> {
-                                        viewHolder.lastCommand.setText(data);
-                                        notifyDataSetChanged();
-                                        MainActivity.clipboardManager.setText(data);
-                                    }, 0);
-                                    return true;
-                                });
-                                break;
-                            default:
-                                break;
-                        }
-                    }
-                });
-            }
+                        padlock.setProccessing(false);
+                        return true;
+                    },
+                    error -> {
+                        MainActivity.showMessage(error);
+                        padlock.setProccessing(false);
+                        return true;
+                    });
         });
 
         return convertView;

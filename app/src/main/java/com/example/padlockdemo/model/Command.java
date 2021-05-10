@@ -10,23 +10,18 @@ import java.util.List;
 public class Command {
     private byte head;
     private byte cmd;
-    private byte len;
     private byte[] data1;
     private byte[] data2;
     private byte[] token;
 
-    public static Command unlockCmd = new Command((byte)0x00, (byte)0x00, (byte)0x05, ByteBuffer.allocate(4).putInt((int)(System.currentTimeMillis() / 1000L)).array(), new byte[] { (byte)0x01 });
-
-    public Command(byte head, byte cmd, byte len) {
+    public Command(byte head, byte cmd) {
         this.head = head;
         this.cmd = cmd;
-        this.len = len;
     }
 
-    public Command(byte head, byte cmd, byte len, byte[] data1, byte[] data2) {
+    public Command(byte head, byte cmd, byte[] data1, byte[] data2) {
         this.head = head;
         this.cmd = cmd;
-        this.len = len;
         this.data1 = data1;
         this.data2 = data2;
     }
@@ -48,11 +43,8 @@ public class Command {
     }
 
     public byte getLen() {
-        return len;
-    }
-
-    public void setLen(byte len) {
-        this.len = len;
+        int length = (this.data1 != null ? this.data1.length : 0) + (this.data2 != null ? this.data2.length : 0);
+        return new Integer(length).byteValue();
     }
 
     public byte[] getData1() {
@@ -83,7 +75,7 @@ public class Command {
         List<Byte> bytes = new ArrayList<>();
         bytes.add(head);
         bytes.add(cmd);
-        bytes.add(len);
+        bytes.add(getLen());
         for (byte b: data1) {
             bytes.add(b);
         }
@@ -99,5 +91,55 @@ public class Command {
     public String getCommandString() {
         byte[] bytes = getCommandData();
         return BaseEncoding.base16().encode(bytes);
+    }
+
+    public static final byte HEAD_REQUEST = 0x00;
+    public static final byte HEAD_RESPONSE = 0x01;
+
+    // Unlock padlock
+    public static final byte CMD_UNLOCK = 0x00;
+    public static final byte CMD_SET_WORK_MODE = 0x02;
+    public static final byte CMD_QUERY_UNLOCK_TIMES = 0x05;
+    public static final byte CMD_QUERY_SW_VERSION = 0x08;
+    // Check lock status
+    public static final byte CMD_QUERY_LOCK_BEAM_STATUS = 0x09;
+    public static final byte CMD_QUERY_POWER_PERCENTAGE = 0x0A;
+    public static final byte CMD_CHANGE_TOKEN = 0x0B;
+    public static final byte CMD_CHANGE_KEY = 0x0C;
+
+    public static final byte RESULT_SUCCESS = 0x00;
+    public static final byte RESULT_FAIL = 0x01;
+
+    public static Command unlockRequest = new Command(
+            HEAD_REQUEST,
+            CMD_UNLOCK,
+            ByteBuffer.allocate(4).putInt((int)(System.currentTimeMillis() / 1000L)).array(),
+            new byte[] { (byte)0x01 });
+    public static Command querylockStatusRequest = new Command(
+            HEAD_REQUEST,
+            CMD_QUERY_LOCK_BEAM_STATUS,
+            new byte[] { (byte)0x01 },
+            new byte[] { });
+
+    public static boolean isRequestSuccess(byte[] data) {
+        if (data[0] == HEAD_RESPONSE) {
+            switch (data[1]) {
+                case CMD_UNLOCK:
+                    return data[4] == RESULT_SUCCESS;
+                case CMD_QUERY_LOCK_BEAM_STATUS:
+                    return data[3] == RESULT_SUCCESS;
+                default:
+                    return false;
+            }
+        }
+
+        return false;
+    }
+
+    public static boolean isLocked(byte[] data) {
+        return data[0] == HEAD_RESPONSE &&
+                data[1] == CMD_QUERY_LOCK_BEAM_STATUS &&
+                data[3] == RESULT_FAIL;
+
     }
 }

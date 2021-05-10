@@ -1,38 +1,19 @@
 package com.example.padlockdemo;
 
-import android.Manifest;
 import android.app.Activity;
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothGattCallback;
-import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
-import android.bluetooth.BluetoothGattService;
-import android.bluetooth.BluetoothManager;
-import android.bluetooth.BluetoothProfile;
-import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanFilter;
-import android.bluetooth.le.ScanResult;
-import android.bluetooth.le.ScanSettings;
-import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.location.LocationManager;
 import android.os.Bundle;
-import android.os.Handler;
 import android.util.Log;
-import android.widget.ListView;
 import android.widget.Toast;
 
+import com.clj.fastble.BleManager;
+import com.clj.fastble.callback.BleScanCallback;
+import com.clj.fastble.data.BleDevice;
+import com.clj.fastble.scan.BleScanRuleConfig;
 import com.example.padlockdemo.adapter.PadlocksAdapter;
-import com.example.padlockdemo.model.BluetoothPadlock;
+import com.example.padlockdemo.model.BlePadlock;
 import com.example.padlockdemo.model.Command;
-import com.example.padlockdemo.ui.home.HomeFragment;
-import com.example.padlockdemo.util.AesUtil;
 import com.example.padlockdemo.util.AsyncUtil;
 import com.example.padlockdemo.util.BluetoothUtil;
 import com.example.padlockdemo.util.PadlockUtil;
@@ -41,8 +22,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.navigation.NavController;
 import androidx.navigation.Navigation;
 import androidx.navigation.ui.AppBarConfiguration;
@@ -50,8 +30,8 @@ import androidx.navigation.ui.NavigationUI;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
-import java.util.Vector;
 
 public class MainActivity extends AppCompatActivity {
     private final static String TAG = MainActivity.class.getSimpleName();
@@ -59,11 +39,11 @@ public class MainActivity extends AppCompatActivity {
     private final static int REQUEST_ENABLE_BT = 1;
 
     private static Activity currentActivity;
-    private static BluetoothAdapter bluetoothAdapter;
-    private static BluetoothLeScanner bluetoothLeScanner;
-    public static ArrayList<BluetoothPadlock> bluetoothPadlockList;
-    public static ClipboardManager clipboardManager;
+    public static ArrayList<BlePadlock> blePadlockArrayList;
+    public static PadlocksAdapter padlocksAdapter;
 
+    private ClipboardManager clipboardManager;
+    private BleManager bleManager;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,90 +58,92 @@ public class MainActivity extends AppCompatActivity {
         NavigationUI.setupActionBarWithNavController(this, navController, appBarConfiguration);
         NavigationUI.setupWithNavController(navView, navController);
 
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+
         currentActivity = this;
-        bluetoothPadlockList = new ArrayList<>();
+        blePadlockArrayList = new ArrayList<>();
+        blePadlockArrayList.add(new BlePadlock("868315518395127", PadlockUtil.serviceUuid, PadlockUtil.name, "D5:3B:F9:45:27:58", "f508eebe"));
+        blePadlockArrayList.add(new BlePadlock("868315518395770", PadlockUtil.serviceUuid, PadlockUtil.name, "F1:F2:80:90:81:29", "a716c2f1"));
+        blePadlockArrayList.add(new BlePadlock("868315518397131", PadlockUtil.serviceUuid, PadlockUtil.name, "C3:17:99:9C:49:AF", "9059eea5"));
 
         clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+
+        bleManager = BleManager.getInstance();
+        bleManager.init(getApplication());
+
+        if (!bleManager.isSupportBle()) {
+            showMessage("BLE is not supported");
+        } else {
+            bleManager.enableBluetooth();
+            bleManager.enableLog(true)
+                    .setReConnectCount(1, 5000)
+                    .setSplitWriteNum(20)
+                    .setConnectOverTime(10000)
+                    .setOperateTimeout(5000);
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
 
-        if (!BluetoothUtil.requestBlePermissions(this, REQUEST_ENABLE_BT) && BluetoothUtil.areLocationServicesEnabled(this)) {
-            startBleService();
-        }
-    }
+        BleScanRuleConfig scanRuleConfig = new BleScanRuleConfig.Builder()
+                .setServiceUuids(new UUID[] { UUID.fromString(PadlockUtil.serviceUuid) })
+                .setDeviceName(true, PadlockUtil.name)
+                .setScanTimeOut(10000)
+                .build();
+        bleManager.initScanRule(scanRuleConfig);
 
-    public void startBleService() {
-        final BluetoothManager bluetoothManager = (BluetoothManager)getSystemService(Context.BLUETOOTH_SERVICE);
-        bluetoothAdapter = bluetoothManager.getAdapter();
-        bluetoothLeScanner = bluetoothAdapter.getBluetoothLeScanner();
+        bleManager.scan(new BleScanCallback() {
+            @Override
+            public void onScanFinished(List<BleDevice> scanResultList) {
+                for (BleDevice device : scanResultList) {
+                    BlePadlock padlock = BlePadlock.getPadlock(blePadlockArrayList, device);
+                    if (padlock != null && padlock.getDevice() == null) {
+                        padlock.setDevice(device);
+                        padlock.setProccessing(true);
 
-        if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
-            showMessage("BLE is not supported");
-            finish();
-        }
+                        padlocksAdapter.notifyDataSetChanged();
 
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
-            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-        } else {
-            scanLeDevice(true);
-        }
+                        AsyncUtil.postDelay(getApplicationContext(), () -> {
+                            PadlockUtil.queryLockStatus(
+                                    getApplicationContext(),
+                                    padlock,
+                                    data -> {
+                                        padlock.setLocked(Command.isLocked(data));
+                                        padlock.setProccessing(false);
+                                        padlocksAdapter.notifyDataSetChanged();
+                                        return true;
+                                    },
+                                    error -> {
+                                        padlock.setProccessing(false);
+                                        padlocksAdapter.notifyDataSetChanged();
+                                        return true;
+                                    });
+                        }, new Random().nextInt(1000));
+                    }
+                }
+            }
+
+            @Override
+            public void onScanStarted(boolean success) {
+
+            }
+
+            @Override
+            public void onScanning(BleDevice bleDevice) {
+                showMessage("Scanning");
+            }
+        });
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
-        if (requestCode == REQUEST_ENABLE_BT && BluetoothUtil.checkGrantResults(permissions, grantResults)) {
-            if (BluetoothUtil.areLocationServicesEnabled(this)) {
-                startBleService();
-            }
-        }
-    }
-
-    private void scanLeDevice(final boolean enable) {
-        ScanFilter.Builder builder = new ScanFilter.Builder();
-        builder.setDeviceName(PadlockUtil.name);
-        Vector<ScanFilter> filters = new Vector<ScanFilter>();
-        filters.add(builder.build());
-
-        ScanSettings.Builder scanSettingsBuilder = new ScanSettings.Builder();
-        scanSettingsBuilder.setScanMode(ScanSettings.SCAN_MODE_BALANCED);
-        scanSettingsBuilder.setReportDelay(0);
-
-        if (enable) {
-            showMessage("Start scanning BLE devices...");
-            bluetoothLeScanner.startScan(filters, scanSettingsBuilder.build(), scanCallback);
-        } else {
-            showMessage("Stop scanning BLE devices...");
-            bluetoothLeScanner.stopScan(scanCallback);
-        }
-    }
-
-    private ScanCallback scanCallback = new ScanCallback() {
-        @Override
-        public void onScanResult(int callbackType, ScanResult result) {
-            super.onScanResult(callbackType, result);
-            addDevice(result.getDevice(), result);
-        }
-    };
-
-    private BluetoothPadlock getBluetoothPadlock (String macAddress) {
-        for (BluetoothPadlock padlock : bluetoothPadlockList) {
-            if (padlock.getMacAddress().equals(macAddress))
-                return padlock;
-        }
-        return null;
-    }
-
-    private void addDevice(BluetoothDevice device, ScanResult scanResult) {
-        BluetoothPadlock padlock = getBluetoothPadlock(device.getAddress());
-        if (padlock != null) {
-            padlock.setBluetoothDevice(device);
-            HomeFragment.padlocksAdapter.notifyDataSetChanged();
+        if (requestCode == REQUEST_ENABLE_BT && BluetoothUtil.checkGrantResults(permissions, grantResults)
+            && BluetoothUtil.areLocationServicesEnabled(this)) {
+            // Ble has permissions and open
         }
     }
 
