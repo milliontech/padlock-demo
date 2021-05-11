@@ -1,39 +1,35 @@
 package com.example.padlockdemo.adapter;
 
-import android.bluetooth.BluetoothGatt;
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
+import android.view.animation.LinearInterpolator;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
-import com.clj.fastble.BleManager;
-import com.clj.fastble.callback.BleGattCallback;
-import com.clj.fastble.callback.BleNotifyCallback;
-import com.clj.fastble.callback.BleWriteCallback;
-import com.clj.fastble.data.BleDevice;
-import com.clj.fastble.exception.BleException;
 import com.example.padlockdemo.MainActivity;
 import com.example.padlockdemo.R;
 import com.example.padlockdemo.model.BlePadlock;
 import com.example.padlockdemo.model.Command;
-import com.example.padlockdemo.util.AsyncUtil;
 import com.example.padlockdemo.util.PadlockUtil;
-import com.example.padlockdemo.util.StringUtil;
 
 import java.util.ArrayList;
-import java.util.UUID;
 
 public class PadlocksAdapter extends ArrayAdapter<BlePadlock> {
 
     private static class ViewHolder {
         CheckBox selected;
+        ImageView status;
         TextView id;
         TextView name;
         TextView macAddress;
@@ -57,6 +53,7 @@ public class PadlocksAdapter extends ArrayAdapter<BlePadlock> {
             LayoutInflater inflater = LayoutInflater.from(getContext());
             convertView = inflater.inflate(R.layout.item_padlock, parent, false);
             viewHolder.selected = (CheckBox) convertView.findViewById(R.id.checkbox_item_padlock_select);
+            viewHolder.status = (ImageView) convertView.findViewById(R.id.imageview_item_padlock_status);
             viewHolder.id = (TextView) convertView.findViewById(R.id.textview_id);
             viewHolder.name = (TextView) convertView.findViewById(R.id.textview_name);
             viewHolder.macAddress = (TextView) convertView.findViewById(R.id.textview_mac_address);
@@ -68,17 +65,37 @@ public class PadlocksAdapter extends ArrayAdapter<BlePadlock> {
             viewHolder = (ViewHolder) convertView.getTag();
         }
 
+        int color = ContextCompat.getColor(getContext(), R.color.light_grey);
+        if (padlock.getDevice() != null && padlock.isConnected()) {
+            color = ContextCompat.getColor(getContext(), R.color.light_green);
+        }
+        viewHolder.status.setColorFilter(color, android.graphics.PorterDuff.Mode.MULTIPLY);
+
+        if (viewHolder.status.getAnimation() == null) {
+            Animation animation = new AlphaAnimation(1, 0);
+            animation.setDuration(1000);
+            animation.setInterpolator(new LinearInterpolator());
+            animation.setRepeatCount(Animation.INFINITE);
+            animation.setRepeatMode(Animation.REVERSE);
+            viewHolder.status.setAnimation(animation);
+        }
+        if (padlock.isProcessing()) {
+            viewHolder.status.getAnimation().start();
+        } else {
+            viewHolder.status.getAnimation().cancel();
+        }
+
         viewHolder.id.setText(padlock.getId());
         viewHolder.name.setText(padlock.getName());
-        if (padlock.getDevice() != null && !padlock.isProccessing()) {
+        if (padlock.getDevice() != null && !padlock.isProcessing()) {
             //viewHolder.name.setText(padlock.getName() + (padlock.isLocked() ? " (Locked)" : " (Unlocked)") );
         }
         viewHolder.macAddress.setText(padlock.getMacAddress());
         viewHolder.connectButton.setEnabled(padlock.getDevice() != null);
-        viewHolder.unlockButton.setEnabled(padlock.getDevice() != null);
+        viewHolder.unlockButton.setEnabled(padlock.getDevice() != null && padlock.isLocked());
 
         viewHolder.unlockButton.setOnClickListener(view -> {
-            padlock.setProccessing(true);
+            padlock.setProcessing(true);
             PadlockUtil.unlock(
                     getContext(),
                     padlock,
@@ -86,12 +103,13 @@ public class PadlocksAdapter extends ArrayAdapter<BlePadlock> {
                         if (Command.isRequestSuccess(data)) {
                             MainActivity.showMessage("Unlock successfully!");
                         }
-                        padlock.setProccessing(false);
+                        padlock.setProcessing(false);
+                        notifyDataSetChanged();
                         return true;
                     },
                     error -> {
                         MainActivity.showMessage(error);
-                        padlock.setProccessing(false);
+                        padlock.setProcessing(false);
                         return true;
                     });
         });

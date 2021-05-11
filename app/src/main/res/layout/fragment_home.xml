@@ -5,10 +5,15 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context="com.example.padlockdemo.ui.home.HomeFragment">
-    <ListView
-        android:id="@+id/deviceList"
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipe_device_list"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="@color/light_grey">
-    </ListView>
+        android:layout_height="match_parent">
+        <ListView
+            android:id="@+id/listview_device_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/light_grey">
+        </ListView>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

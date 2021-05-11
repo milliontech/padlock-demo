@@ -11,19 +11,21 @@ public class BlePadlock {
     private String name;
     private String macAddress;
     private String token;
+    private boolean autoDisconnect;
     private BleDevice device;
 
-    private boolean proccessing;
+    private boolean processing;
     private boolean connected;
     private boolean locked;
     private boolean selected;
 
-    public BlePadlock(String id, String serviceUuid, String name, String macAddress, String token) {
+    public BlePadlock(String id, String serviceUuid, String name, String macAddress, String token, boolean autoDisconnect) {
         this.id = id;
         this.serviceUuid = serviceUuid;
         this.name = name;
         this.macAddress = macAddress;
         this.token = token;
+        this.autoDisconnect = autoDisconnect;
 
         this.connected = false;
         this.locked = false;
@@ -60,6 +62,13 @@ public class BlePadlock {
     public void setToken(String token) {
         this.token = token;
     }
+    public boolean isAutoDisconnect() {
+        return autoDisconnect;
+    }
+    public void setAutoDisconnect(boolean autoDisconnect) {
+        this.autoDisconnect = autoDisconnect;
+    }
+
     public BleDevice getDevice() {
         return device;
     }
@@ -67,11 +76,11 @@ public class BlePadlock {
         this.device = device;
     }
 
-    public boolean isProccessing() {
-        return proccessing;
+    public boolean isProcessing() {
+        return processing;
     }
-    public void setProccessing(boolean proccessing) {
-        this.proccessing = proccessing;
+    public void setProcessing(boolean processing) {
+        this.processing = processing;
     }
     public boolean isConnected() {
         return connected;

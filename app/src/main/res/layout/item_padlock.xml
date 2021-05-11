@@ -30,12 +30,24 @@
         android:orientation="vertical"
         app:layout_constraintLeft_toRightOf="@id/layout_item_padlock_left"
         app:layout_constraintRight_toLeftOf="@id/layout_item_padlock_right">
-        <TextView
-            android:id="@+id/textview_id"
+
+        <RelativeLayout
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="123456789012345">
-        </TextView>
+            android:layout_height="wrap_content">
+            <ImageView
+                android:id="@+id/imageview_item_padlock_status"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_alignParentRight="true"
+                android:src="@drawable/circle" />
+            <TextView
+                android:id="@+id/textview_id"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="123456789012345">
+            </TextView>
+        </RelativeLayout>
+
         <TextView
             android:id="@+id/textview_name"
             android:layout_width="wrap_content"

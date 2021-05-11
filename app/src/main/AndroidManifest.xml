@@ -25,6 +25,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <receiver android:name=".model.PadlockReceiver" android:enabled="true" android:exported="true">
+            <intent-filter>
+                <action android:name="onConnectSuccess" />
+                <action android:name="onDisConnected" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

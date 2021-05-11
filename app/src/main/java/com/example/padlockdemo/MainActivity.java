@@ -1,8 +1,10 @@
 package com.example.padlockdemo;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Toast;
@@ -14,10 +16,10 @@ import com.clj.fastble.scan.BleScanRuleConfig;
 import com.example.padlockdemo.adapter.PadlocksAdapter;
 import com.example.padlockdemo.model.BlePadlock;
 import com.example.padlockdemo.model.Command;
+import com.example.padlockdemo.model.PadlockReceiver;
 import com.example.padlockdemo.util.AsyncUtil;
 import com.example.padlockdemo.util.BluetoothUtil;
 import com.example.padlockdemo.util.PadlockUtil;
-import com.example.padlockdemo.util.StringUtil;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import androidx.annotation.NonNull;
@@ -29,6 +31,7 @@ import androidx.navigation.ui.AppBarConfiguration;
 import androidx.navigation.ui.NavigationUI;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
@@ -44,6 +47,8 @@ public class MainActivity extends AppCompatActivity {
 
     private ClipboardManager clipboardManager;
     private BleManager bleManager;
+
+    private BroadcastReceiver broadcastReceiver;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,9 +67,9 @@ public class MainActivity extends AppCompatActivity {
 
         currentActivity = this;
         blePadlockArrayList = new ArrayList<>();
-        blePadlockArrayList.add(new BlePadlock("868315518395127", PadlockUtil.serviceUuid, PadlockUtil.name, "D5:3B:F9:45:27:58", "f508eebe"));
-        blePadlockArrayList.add(new BlePadlock("868315518395770", PadlockUtil.serviceUuid, PadlockUtil.name, "F1:F2:80:90:81:29", "a716c2f1"));
-        blePadlockArrayList.add(new BlePadlock("868315518397131", PadlockUtil.serviceUuid, PadlockUtil.name, "C3:17:99:9C:49:AF", "9059eea5"));
+        blePadlockArrayList.add(new BlePadlock("868315518395127", PadlockUtil.serviceUuid, PadlockUtil.name, "D5:3B:F9:45:27:58", "f508eebe", false));
+        blePadlockArrayList.add(new BlePadlock("868315518395770", PadlockUtil.serviceUuid, PadlockUtil.name, "F1:F2:80:90:81:29", "a716c2f1", true));
+        blePadlockArrayList.add(new BlePadlock("868315518397131", PadlockUtil.serviceUuid, PadlockUtil.name, "C3:17:99:9C:49:AF", "9059eea5", true));
 
         clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
 
@@ -87,6 +92,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
+        IntentFilter intentFilter = new IntentFilter();
+        Arrays.stream(PadlockReceiver.intentFilters).forEach(i -> intentFilter.addAction(i));
+        broadcastReceiver = new PadlockReceiver();
+        this.registerReceiver(broadcastReceiver, intentFilter);
+
         BleScanRuleConfig scanRuleConfig = new BleScanRuleConfig.Builder()
                 .setServiceUuids(new UUID[] { UUID.fromString(PadlockUtil.serviceUuid) })
                 .setDeviceName(true, PadlockUtil.name)
@@ -94,33 +104,58 @@ public class MainActivity extends AppCompatActivity {
                 .build();
         bleManager.initScanRule(scanRuleConfig);
 
-        bleManager.scan(new BleScanCallback() {
+        scan(null);
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+
+        this.unregisterReceiver(broadcastReceiver);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        if (requestCode == REQUEST_ENABLE_BT && BluetoothUtil.checkGrantResults(permissions, grantResults)
+            && BluetoothUtil.areLocationServicesEnabled(this)) {
+            // Ble has permissions and open
+        }
+    }
+
+    public static void scan(Runnable successFunc) {
+        BleManager.getInstance().scan(new BleScanCallback() {
             @Override
             public void onScanFinished(List<BleDevice> scanResultList) {
                 for (BleDevice device : scanResultList) {
                     BlePadlock padlock = BlePadlock.getPadlock(blePadlockArrayList, device);
-                    if (padlock != null && padlock.getDevice() == null) {
+                    if (padlock != null) {
                         padlock.setDevice(device);
-                        padlock.setProccessing(true);
-
+                        padlock.setProcessing(true);
                         padlocksAdapter.notifyDataSetChanged();
 
-                        AsyncUtil.postDelay(getApplicationContext(), () -> {
+                        AsyncUtil.postDelay(currentActivity, () -> {
                             PadlockUtil.queryLockStatus(
-                                    getApplicationContext(),
+                                    currentActivity,
                                     padlock,
                                     data -> {
-                                        padlock.setLocked(Command.isLocked(data));
-                                        padlock.setProccessing(false);
+                                        boolean isLocked = Command.isLocked(data);
+                                        padlock.setLocked(isLocked);
+                                        padlock.setProcessing(false);
                                         padlocksAdapter.notifyDataSetChanged();
+                                        if (successFunc != null)
+                                            successFunc.run();
                                         return true;
                                     },
                                     error -> {
-                                        padlock.setProccessing(false);
+                                        padlock.setProcessing(false);
                                         padlocksAdapter.notifyDataSetChanged();
+                                        if (successFunc != null)
+                                            successFunc.run();
                                         return true;
                                     });
-                        }, new Random().nextInt(1000));
+                        }, 0);
                     }
                 }
             }
@@ -135,16 +170,6 @@ public class MainActivity extends AppCompatActivity {
                 showMessage("Scanning");
             }
         });
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == REQUEST_ENABLE_BT && BluetoothUtil.checkGrantResults(permissions, grantResults)
-            && BluetoothUtil.areLocationServicesEnabled(this)) {
-            // Ble has permissions and open
-        }
     }
 
     public static void showMessage(String message) {
