@@ -12,6 +12,7 @@ import com.clj.fastble.callback.BleWriteCallback;
 import com.clj.fastble.data.BleDevice;
 import com.clj.fastble.exception.BleException;
 import com.example.padlockdemo.model.BlePadlock;
+import com.example.padlockdemo.model.BleRequest;
 import com.example.padlockdemo.model.Command;
 import com.example.padlockdemo.model.PadlockReceiver;
 import com.google.gson.Gson;
@@ -26,7 +27,10 @@ public class PadlockUtil {
     public static String notifyUuid = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
     public static String name = "HeartLock";
 
-    private static void sendRequest(Context context, BlePadlock padlock, Command command,
+    public static void sendRequest(BleRequest request, Function<byte[], Boolean> successFunc, Function<String, Boolean> failFunc) {
+        sendRequest(request.getContext(), request.getBlePadlock(), request.getCommand(), successFunc, failFunc);
+    }
+    public static void sendRequest(Context context, BlePadlock padlock, Command command,
                                     Function<byte[], Boolean> successFunc, Function<String, Boolean> failFunc) {
         command.setToken(StringUtil.StrToHexbyte(padlock.getToken()));
         Log.d(TAG, String.format("Sending command [%s] to [%s]...", command.getCommandString(), padlock.getMacAddress()));
@@ -125,11 +129,11 @@ public class PadlockUtil {
 
     public static void unlock(Context context, BlePadlock padlock,
                               Function<byte[], Boolean> successFunc, Function<String, Boolean> failFunc) {
-        sendRequest(context, padlock, Command.unlockRequest, successFunc, failFunc);
+        sendRequest(context, padlock, Command.unlock, successFunc, failFunc);
     }
 
     public static void queryLockStatus(Context context, BlePadlock padlock,
                                        Function<byte[], Boolean> successFunc, Function<String, Boolean> failFunc) {
-        sendRequest(context, padlock, Command.querylockStatusRequest, successFunc, failFunc);
+        sendRequest(context, padlock, Command.queryLockStatus, successFunc, failFunc);
     }
 }

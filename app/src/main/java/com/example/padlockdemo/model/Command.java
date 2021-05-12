@@ -5,6 +5,7 @@ import com.google.common.primitives.Bytes;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class Command {
@@ -96,12 +97,13 @@ public class Command {
     public static final byte HEAD_REQUEST = 0x00;
     public static final byte HEAD_RESPONSE = 0x01;
 
-    // Unlock padlock
     public static final byte CMD_UNLOCK = 0x00;
+    // C102 only
+    public static final byte CMD_LOOK_UP_NOTIFICATION = 0x01;
     public static final byte CMD_SET_WORK_MODE = 0x02;
+    //
     public static final byte CMD_QUERY_UNLOCK_TIMES = 0x05;
     public static final byte CMD_QUERY_SW_VERSION = 0x08;
-    // Check lock status
     public static final byte CMD_QUERY_LOCK_BEAM_STATUS = 0x09;
     public static final byte CMD_QUERY_POWER_PERCENTAGE = 0x0A;
     public static final byte CMD_CHANGE_TOKEN = 0x0B;
@@ -110,16 +112,61 @@ public class Command {
     public static final byte RESULT_SUCCESS = 0x00;
     public static final byte RESULT_FAIL = 0x01;
 
-    public static Command unlockRequest = new Command(
+    public static final byte BYTE_ZERO = 0x00;
+    public static final byte BYTE_ONE = 0x01;
+    public static final byte[] BYTES_EMPTY = new byte[] { };
+    public static final byte[] BYTES_ZERO = new byte[] { BYTE_ZERO };
+    public static final byte[] BYTES_ONE = new byte[] { BYTE_ONE };
+
+    public static final byte DATA_IDLE_MODE = 0x00;
+    public static final byte DATA_ENERGY_MODE = 0x01;
+    public static final byte DATA_NORMAL_MODE = 0x02;
+
+    public static Command unlock = new Command(
             HEAD_REQUEST,
             CMD_UNLOCK,
             ByteBuffer.allocate(4).putInt((int)(System.currentTimeMillis() / 1000L)).array(),
-            new byte[] { (byte)0x01 });
-    public static Command querylockStatusRequest = new Command(
+            BYTES_ONE);
+    public static Command setWorkMode = new Command(
+            HEAD_REQUEST,
+            CMD_UNLOCK,
+            BYTES_ZERO,
+            BYTES_EMPTY);
+    public static Command queryUnlockTimes = new Command(
+            HEAD_REQUEST,
+            CMD_QUERY_UNLOCK_TIMES,
+            BYTES_ZERO,
+            BYTES_ZERO);
+    public static Command querySoftwareVersion = new Command(
+            HEAD_REQUEST,
+            CMD_QUERY_SW_VERSION,
+            BYTES_ZERO,
+            BYTES_EMPTY);
+    public static Command queryLockStatus = new Command(
             HEAD_REQUEST,
             CMD_QUERY_LOCK_BEAM_STATUS,
-            new byte[] { (byte)0x01 },
-            new byte[] { });
+            BYTES_ONE,
+            BYTES_EMPTY);
+    public static Command queryPowerPercentage = new Command(
+            HEAD_REQUEST,
+            CMD_QUERY_POWER_PERCENTAGE,
+            BYTES_ZERO,
+            BYTES_EMPTY);
+    public static Command changeToken = new Command(
+            HEAD_REQUEST,
+            CMD_CHANGE_TOKEN,
+            BYTES_EMPTY,
+            BYTES_EMPTY);
+    public static Command changeKey = new Command(
+            HEAD_REQUEST,
+            CMD_CHANGE_KEY,
+            BYTES_EMPTY,
+            BYTES_EMPTY);
+
+    public static byte[] getResponseData(byte[] data) {
+        byte[] data1 = Arrays.copyOfRange(data, 3, data.length - 4);
+        return data1;
+    }
 
     public static boolean isRequestSuccess(byte[] data) {
         if (data[0] == HEAD_RESPONSE) {

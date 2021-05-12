@@ -17,11 +17,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
-import com.example.padlockdemo.MainActivity;
 import com.example.padlockdemo.R;
+import com.example.padlockdemo.manager.BleRequestManager;
 import com.example.padlockdemo.model.BlePadlock;
+import com.example.padlockdemo.model.BleRequest;
 import com.example.padlockdemo.model.Command;
-import com.example.padlockdemo.util.PadlockUtil;
 
 import java.util.ArrayList;
 
@@ -33,7 +33,9 @@ public class PadlocksAdapter extends ArrayAdapter<BlePadlock> {
         TextView id;
         TextView name;
         TextView macAddress;
-        TextView lastCommand;
+        TextView unlockTimes;
+        TextView power;
+        TextView version;
         Button connectButton;
         Button unlockButton;
     }
@@ -57,7 +59,9 @@ public class PadlocksAdapter extends ArrayAdapter<BlePadlock> {
             viewHolder.id = (TextView) convertView.findViewById(R.id.textview_id);
             viewHolder.name = (TextView) convertView.findViewById(R.id.textview_name);
             viewHolder.macAddress = (TextView) convertView.findViewById(R.id.textview_mac_address);
-            viewHolder.lastCommand = (TextView) convertView.findViewById(R.id.textview_last_command);
+            viewHolder.unlockTimes = (TextView) convertView.findViewById(R.id.textview_unlock_times);
+            viewHolder.power = (TextView) convertView.findViewById(R.id.textview_power);
+            viewHolder.version = (TextView)  convertView.findViewById(R.id.textview_version);
             viewHolder.connectButton = (Button) convertView.findViewById(R.id.button_padlock_connect);
             viewHolder.unlockButton = (Button) convertView.findViewById(R.id.button_padlock_unlock);
             convertView.setTag(viewHolder);
@@ -87,31 +91,28 @@ public class PadlocksAdapter extends ArrayAdapter<BlePadlock> {
 
         viewHolder.id.setText(padlock.getId());
         viewHolder.name.setText(padlock.getName());
-        if (padlock.getDevice() != null && !padlock.isProcessing()) {
-            //viewHolder.name.setText(padlock.getName() + (padlock.isLocked() ? " (Locked)" : " (Unlocked)") );
-        }
         viewHolder.macAddress.setText(padlock.getMacAddress());
+        viewHolder.unlockTimes.setText(String.valueOf(padlock.getUnlockTimes()));
+        viewHolder.power.setText(String.valueOf(padlock.getPower()) + "%");
+        viewHolder.version.setText(padlock.getVersion());
         viewHolder.connectButton.setEnabled(padlock.getDevice() != null);
-        viewHolder.unlockButton.setEnabled(padlock.getDevice() != null && padlock.isLocked());
+        viewHolder.unlockButton.setEnabled(padlock.getDevice() != null);
 
         viewHolder.unlockButton.setOnClickListener(view -> {
-            padlock.setProcessing(true);
-            PadlockUtil.unlock(
-                    getContext(),
-                    padlock,
-                    data -> {
-                        if (Command.isRequestSuccess(data)) {
-                            MainActivity.showMessage("Unlock successfully!");
-                        }
-                        padlock.setProcessing(false);
-                        notifyDataSetChanged();
-                        return true;
-                    },
-                    error -> {
-                        MainActivity.showMessage(error);
-                        padlock.setProcessing(false);
-                        return true;
-                    });
+            BleRequestManager.getInstance()
+                    .add(new BleRequest(getContext(), padlock, Command.unlock, () -> notifyDataSetChanged()));
+
+        });
+        viewHolder.name.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override
+            public boolean onLongClick(View view) {
+                Command command = Command.setWorkMode;
+                command.setData1(new byte[] { Command.DATA_IDLE_MODE });
+                BleRequestManager.getInstance()
+                        .add(new BleRequest(getContext(), padlock, command, () -> notifyDataSetChanged()));
+
+                return true;
+            }
         });
 
         return convertView;

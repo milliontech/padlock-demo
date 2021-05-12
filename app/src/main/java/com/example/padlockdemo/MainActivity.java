@@ -14,7 +14,9 @@ import com.clj.fastble.callback.BleScanCallback;
 import com.clj.fastble.data.BleDevice;
 import com.clj.fastble.scan.BleScanRuleConfig;
 import com.example.padlockdemo.adapter.PadlocksAdapter;
+import com.example.padlockdemo.manager.BleRequestManager;
 import com.example.padlockdemo.model.BlePadlock;
+import com.example.padlockdemo.model.BleRequest;
 import com.example.padlockdemo.model.Command;
 import com.example.padlockdemo.model.PadlockReceiver;
 import com.example.padlockdemo.util.AsyncUtil;
@@ -33,7 +35,6 @@ import androidx.navigation.ui.NavigationUI;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
@@ -41,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final static int REQUEST_ENABLE_BT = 1;
 
-    private static Activity currentActivity;
+    public static Activity currentActivity;
     public static ArrayList<BlePadlock> blePadlockArrayList;
     public static PadlocksAdapter padlocksAdapter;
 
@@ -53,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
         BottomNavigationView navView = findViewById(R.id.nav_view);
 
@@ -96,15 +98,6 @@ public class MainActivity extends AppCompatActivity {
         Arrays.stream(PadlockReceiver.intentFilters).forEach(i -> intentFilter.addAction(i));
         broadcastReceiver = new PadlockReceiver();
         this.registerReceiver(broadcastReceiver, intentFilter);
-
-        BleScanRuleConfig scanRuleConfig = new BleScanRuleConfig.Builder()
-                .setServiceUuids(new UUID[] { UUID.fromString(PadlockUtil.serviceUuid) })
-                .setDeviceName(true, PadlockUtil.name)
-                .setScanTimeOut(10000)
-                .build();
-        bleManager.initScanRule(scanRuleConfig);
-
-        scan(null);
     }
 
     @Override
@@ -125,6 +118,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public static void scan(Runnable successFunc) {
+        BleScanRuleConfig scanRuleConfig = new BleScanRuleConfig.Builder()
+                .setServiceUuids(new UUID[] { UUID.fromString(PadlockUtil.serviceUuid) })
+                .setDeviceName(true, PadlockUtil.name)
+                .setAutoConnect(false)
+                .build();
+        BleManager.getInstance().initScanRule(scanRuleConfig);
+
         BleManager.getInstance().scan(new BleScanCallback() {
             @Override
             public void onScanFinished(List<BleDevice> scanResultList) {
@@ -133,31 +133,17 @@ public class MainActivity extends AppCompatActivity {
                     if (padlock != null) {
                         padlock.setDevice(device);
                         padlock.setProcessing(true);
-                        padlocksAdapter.notifyDataSetChanged();
 
-                        AsyncUtil.postDelay(currentActivity, () -> {
-                            PadlockUtil.queryLockStatus(
-                                    currentActivity,
-                                    padlock,
-                                    data -> {
-                                        boolean isLocked = Command.isLocked(data);
-                                        padlock.setLocked(isLocked);
-                                        padlock.setProcessing(false);
-                                        padlocksAdapter.notifyDataSetChanged();
-                                        if (successFunc != null)
-                                            successFunc.run();
-                                        return true;
-                                    },
-                                    error -> {
-                                        padlock.setProcessing(false);
-                                        padlocksAdapter.notifyDataSetChanged();
-                                        if (successFunc != null)
-                                            successFunc.run();
-                                        return true;
-                                    });
-                        }, 0);
+                        BleRequestManager manager = BleRequestManager.getInstance();
+                        manager.add(new BleRequest(currentActivity, padlock, Command.queryPowerPercentage, () -> padlocksAdapter.notifyDataSetChanged()));
+                        manager.add(new BleRequest(currentActivity, padlock, Command.queryUnlockTimes, () -> padlocksAdapter.notifyDataSetChanged()));
+                        manager.add(new BleRequest(currentActivity, padlock, Command.querySoftwareVersion, () -> padlocksAdapter.notifyDataSetChanged()));
                     }
                 }
+                padlocksAdapter.notifyDataSetChanged();
+
+                if (successFunc != null)
+                    successFunc.run();
             }
 
             @Override
@@ -167,7 +153,6 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onScanning(BleDevice bleDevice) {
-                showMessage("Scanning");
             }
         });
     }
