@@ -91,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public boolean onNavigationMenuEvent(Event event, SublimeBaseMenuItem menuItem) {
                 if (menuItem.getTitle().equals("Power"))
-                    isCheckStatus = event == Event.CHECKED;
+                    isCheckPower = event == Event.CHECKED;
                 else if (menuItem.getTitle().equals("Unlock Times"))
                     isCheckUnlockTimes = event == Event.CHECKED;
                 else if (menuItem.getTitle().equals("Lock Status"))
@@ -130,6 +130,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
+
+        loadPreferences(this);
     }
 
     @Override
@@ -140,15 +142,6 @@ public class MainActivity extends AppCompatActivity {
         Arrays.stream(PadlockReceiver.intentFilters).forEach(i -> intentFilter.addAction(i));
         broadcastReceiver = new PadlockReceiver();
         this.registerReceiver(broadcastReceiver, intentFilter);
-
-
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.command_option_menu, menu);
-        loadPreferences(this);
-        return true;
     }
 
     @Override
