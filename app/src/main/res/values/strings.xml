@@ -3,4 +3,10 @@
     <string name="title_home">Home</string>
     <string name="title_dashboard">Dashboard</string>
     <string name="title_notifications">Notifications</string>
+
+    <string name="preference_power">preference_power</string>
+    <string name="preference_unlock_times">preference_unlock_times</string>
+    <string name="preference_status">preference_status</string>
+    <string name="preference_version">preference_version</string>
+
 </resources>

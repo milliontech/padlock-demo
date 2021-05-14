@@ -1,11 +1,13 @@
 package com.example.padlockdemo.model;
 
+import com.example.padlockdemo.util.StringUtil;
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.Bytes;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.List;
 
 public class Command {
@@ -52,16 +54,18 @@ public class Command {
         return data1;
     }
 
-    public void setData1(byte[] data1) {
+    public Command setData1(byte[] data1) {
         this.data1 = data1;
+        return this;
     }
 
     public byte[] getData2() {
         return data2;
     }
 
-    public void setData2(byte[] data2) {
+    public Command setData2(byte[] data2) {
         this.data2 = data2;
+        return this;
     }
 
     public byte[] getToken() {
@@ -73,6 +77,15 @@ public class Command {
     }
 
     public byte[] getCommandData() {
+        switch (cmd) {
+            case CMD_UNLOCK:
+            case CMD_SET_BUILTIN_CLOCK:
+                setData1(Command.getBytesFromMilliseconds(System.currentTimeMillis()));
+                break;
+            default:
+                break;
+        }
+
         List<Byte> bytes = new ArrayList<>();
         bytes.add(head);
         bytes.add(cmd);
@@ -94,15 +107,20 @@ public class Command {
         return BaseEncoding.base16().encode(bytes);
     }
 
+    public static final String B101 = "B101";
+    public static final String C102 = "C102";
+
     public static final byte HEAD_REQUEST = 0x00;
     public static final byte HEAD_RESPONSE = 0x01;
 
     public static final byte CMD_UNLOCK = 0x00;
-    // C102 only
-    public static final byte CMD_LOOK_UP_NOTIFICATION = 0x01;
-    public static final byte CMD_SET_WORK_MODE = 0x02;
-    //
+    public static final byte CMD_LOOK_UP_NOTIFICATION = 0x01; // C102 only
+    public static final byte CMD_SET_WORK_MODE = 0x02; // C102 only
+    public static final byte CMD_SET_BUILTIN_CLOCK = 0x03; // C102 only
+    public static final byte CMD_QUERY_CURRENT_ALL_STATUS_INFO = 0x04; // C102 only
     public static final byte CMD_QUERY_UNLOCK_TIMES = 0x05;
+    public static final byte CMD_QUERY_TIME_INFO = 0x06; // C102 only
+    public static final byte CMD_QUERY_SIM_CARD_INFO = 0x07; // C102 only
     public static final byte CMD_QUERY_SW_VERSION = 0x08;
     public static final byte CMD_QUERY_LOCK_BEAM_STATUS = 0x09;
     public static final byte CMD_QUERY_POWER_PERCENTAGE = 0x0A;
@@ -122,14 +140,36 @@ public class Command {
     public static final byte DATA_ENERGY_MODE = 0x01;
     public static final byte DATA_NORMAL_MODE = 0x02;
 
+    public static byte[] getBytesFromMilliseconds(long millisecond) {
+        return ByteBuffer.allocate(4).putInt((int)(millisecond / 1000L)).array();
+    }
+    public static long getMillisecondsFromBytes(byte[] data) {
+        return ByteBuffer.wrap(data).getInt();
+    }
+    public static Calendar getCalendarFromMilliseconds(long milliseconds) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(milliseconds);
+        return calendar;
+    }
+
     public static Command unlock = new Command(
             HEAD_REQUEST,
             CMD_UNLOCK,
-            ByteBuffer.allocate(4).putInt((int)(System.currentTimeMillis() / 1000L)).array(),
+            getBytesFromMilliseconds(System.currentTimeMillis()),
             BYTES_ONE);
     public static Command setWorkMode = new Command(
             HEAD_REQUEST,
             CMD_UNLOCK,
+            BYTES_ZERO, // 0x00=Idle mode, 0x01=Energy mode, 0x02=Normal mode
+            BYTES_EMPTY);
+    public static Command setBuiltinClock = new Command(
+            HEAD_REQUEST,
+            CMD_SET_BUILTIN_CLOCK,
+            getBytesFromMilliseconds(System.currentTimeMillis()),
+            BYTES_EMPTY);
+    public static Command queryCurrentAllStatusInfo = new Command(
+            HEAD_REQUEST,
+            CMD_QUERY_CURRENT_ALL_STATUS_INFO,
             BYTES_ZERO,
             BYTES_EMPTY);
     public static Command queryUnlockTimes = new Command(
@@ -137,6 +177,16 @@ public class Command {
             CMD_QUERY_UNLOCK_TIMES,
             BYTES_ZERO,
             BYTES_ZERO);
+    public static Command queryTimeInfo = new Command(
+            HEAD_REQUEST,
+            CMD_QUERY_TIME_INFO,
+            BYTES_EMPTY, // 0x00=Last locking time, 0x01=Clock current time
+            BYTES_EMPTY);
+    public static Command querySimCardInfo = new Command(
+            HEAD_REQUEST,
+            CMD_QUERY_SIM_CARD_INFO,
+            BYTES_EMPTY, // 0x00=ICCID Code, 0x01=IMEI Code
+            BYTES_EMPTY);
     public static Command querySoftwareVersion = new Command(
             HEAD_REQUEST,
             CMD_QUERY_SW_VERSION,
@@ -145,7 +195,7 @@ public class Command {
     public static Command queryLockStatus = new Command(
             HEAD_REQUEST,
             CMD_QUERY_LOCK_BEAM_STATUS,
-            BYTES_ONE,
+            BYTES_ZERO,
             BYTES_EMPTY);
     public static Command queryPowerPercentage = new Command(
             HEAD_REQUEST,

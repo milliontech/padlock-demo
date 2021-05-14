@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.appeaser.sublimenavigationviewlibrary.SublimeNavigationView
+        style="@style/NavigationViewStyle"
+        android:id="@+id/navigation_view"
+        android:layout_width="304dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:fitsSystemWindows="true"
+        app:snvHeaderLayout="@layout/side_menu_header"
+        app:snvMenu="@menu/command_option_menu"
+        app:snvItemTypefaceFilename="planer_bold_webfont.ttf"
+        app:snvHintTypefaceFilename="planer_reg_webfont.ttf"
+        app:snvSubheaderItemTypefaceFilename="planer_bold_webfont.ttf" />
+
+</androidx.drawerlayout.widget.DrawerLayout>

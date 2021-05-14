@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.padlockdemo">
+    package="com.example.padlockdemo"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.BLUETOOTH"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
@@ -15,20 +16,28 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:hardwareAccelerated="true"
         android:theme="@style/Theme.padlockdemo">
         <activity
             android:name="com.example.padlockdemo.MainActivity"
+            android:screenOrientation="sensorPortrait"
             android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="fullSensor"
+            tools:replace="screenOrientation" />
         <receiver android:name=".model.PadlockReceiver" android:enabled="true" android:exported="true">
             <intent-filter>
                 <action android:name="onConnectSuccess" />
                 <action android:name="onDisConnected" />
+                <action android:name="onSendCommand" />
                 <action android:name="onQueueUpdated" />
+                <action android:name="onMessage" />
             </intent-filter>
         </receiver>
     </application>

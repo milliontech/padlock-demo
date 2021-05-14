@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <Checkbox
+        android:id="@+id/command_option_power"
+        android:title="Power"
+        android:hint="Query power percentage" />
+
+    <Checkbox
+        android:id="@+id/command_option_unlock_times"
+        android:title="Unlock Times"
+        android:hint="Query unlock times" />
+
+    <Checkbox
+        android:id="@+id/command_option_status"
+        android:title="Lock Status"
+        android:hint="Query lock beam status" />
+
+    <Checkbox
+        android:id="@+id/command_option_version"
+        android:title="Software Version"
+        android:hint="Query software version" />
+
+</menu>

@@ -11,6 +11,7 @@ import com.clj.fastble.callback.BleNotifyCallback;
 import com.clj.fastble.callback.BleWriteCallback;
 import com.clj.fastble.data.BleDevice;
 import com.clj.fastble.exception.BleException;
+import com.example.padlockdemo.MainActivity;
 import com.example.padlockdemo.model.BlePadlock;
 import com.example.padlockdemo.model.BleRequest;
 import com.example.padlockdemo.model.Command;
@@ -35,6 +36,10 @@ public class PadlockUtil {
         command.setToken(StringUtil.StrToHexbyte(padlock.getToken()));
         Log.d(TAG, String.format("Sending command [%s] to [%s]...", command.getCommandString(), padlock.getMacAddress()));
 
+        MainActivity.currentActivity
+                .sendBroadcast(new Intent(MainActivity.currentActivity, PadlockReceiver.class)
+                        .setAction("onSendCommand").putExtra("Command", command.getCommandString()));
+
         Log.d(TAG, String.format("Padlock [%s] connect...", padlock.getMacAddress()));
         BleManager.getInstance().connect(padlock.getDevice(), new BleGattCallback() {
             @Override
@@ -51,7 +56,9 @@ public class PadlockUtil {
             @Override
             public void onConnectSuccess(BleDevice bleDevice, BluetoothGatt gatt, int status) {
                 padlock.setConnected(true);
-                context.sendBroadcast(new Intent(context, PadlockReceiver.class).setAction("onConnectSuccess"));
+                context.sendBroadcast(new Intent(context, PadlockReceiver.class)
+                        .setAction("onConnectSuccess")
+                        .putExtra("Device", bleDevice.getMac()));
                 Log.d(TAG, String.format("Padlock [%s] onConnectSuccess", padlock.getMacAddress()));
 
                 final boolean[] success = {false};
@@ -121,7 +128,9 @@ public class PadlockUtil {
             @Override
             public void onDisConnected(boolean isActiveDisConnected, BleDevice device, BluetoothGatt gatt, int status) {
                 padlock.setConnected(false);
-                context.sendBroadcast(new Intent(context, PadlockReceiver.class).setAction("onDisConnected"));
+                context.sendBroadcast(new Intent(context, PadlockReceiver.class)
+                        .setAction("onDisConnected")
+                        .putExtra("Device", device.getMac()));
                 Log.d(TAG, String.format("Padlock [%s] onDisConnected", padlock.getMacAddress()));
             }
         });
